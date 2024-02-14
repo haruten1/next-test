@@ -258,3 +258,119 @@ test("公開ステータスを変更すると、status が変わる", async () =
   });
 });
 ```
+
+# ８章　UIコンポーネントエクスプローラー
+
+## storybookを使ったテスト
+
+**これまでのフロントエンドテスト**
+・jsdom を使用した単体/結合テスト
+！！！ここにstorybook！！！
+・ブラウザを使用したE2Eテスト
+
+- controlsを使ったデバック
+  →長い文字とか入れてみてデザインが崩れないかを見る
+
+- Actionsを使ったイベントハンドラーの検証
+- レスポンシブ対応用のviewpointを設定
+  　→共通設定としてSPレイアウトを登録しておく
+```
+export const SPStory = {
+  parameters: {
+    viewport: {
+      viewports: INITIAL_VIEWPORTS,
+      defaultViewport: "iphone6",
+    },
+    screenshot: {
+      viewport: {
+        width: 375,
+        height: 667,
+        deviceScaleFactor: 1,
+      },
+      fullPage: false,
+    },
+  },
+};
+```
+```
+export const SPNotLogIn: Story = {
+  parameters: {
+    ...SPStory.parameters,
+    ...NotLoggedIn.parameters,
+  },
+};
+```
+
+## Play function を利用したインタラクションテスト
+**Play function**＝story book で「文字を入力、ボタンを押下」などのインタラクションを可能にする
+
+モジュールをインストール
+```
+npm install @storybook/testing-library @storybook/jest @storybook/addon-interactions --save-dev
+```
+
+jsdom testing-library  と同様にuserEvent を使用してインタラクションを再現することができる。
+```
+export const SucceedSaveAsDraft: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await user.type(
+      canvas.getByRole("textbox", { name: "記事タイトル" }),
+      "私の技術記事"
+    );
+  },
+};
+```
+
+### アサーションを書く
+```
+export const SavePublish: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await user.type(
+      canvas.getByRole("textbox", { name: "記事タイトル" }),
+      "私の技術記事"
+    );
+    await user.click(canvas.getByRole("switch", { name: "公開ステータス" }));
+    await expect(
+      canvas.getByRole("button", { name: "記事を公開する" })
+    ).toBeInTheDocument();
+  },
+};
+```
+→ story book Interactions上でテストが通っているか確認できる
+
+## addon-a11y を利用したアクセシビリティテスト
+モジュールをインストール
+```
+npm install @storybook/addon-ally --save-dev
+```
+
+アドオンパネルにAccesibility が追加されており、アクセシビリティについての検証結果を見ることができる。
+
+## Storybookの Test runner
+Test runner を使うことでstoryを実行可能なテストに変換する。
+
+モジュールをインストール
+```
+npm install @storybook/test-runner --save-dev
+```
+
+storyが壊れていないか？（インタラクションが失敗しないか）を検証できる。
+
+##  storyを結合テストとして再利用する
+=  StoryのcreateDecoratorをテストの準備として流用できる
+
+```
+npm install --save-dev @storybook/testing-react
+```
+
+### @storybook/testingとtest-runnerの違い
+**@storybook/testingの利点**
+- モックやスパイが必要なテストを書ける
+- 実行速度が速い（ヘッドレスブラウザを使用しない）
+
+**test-runnerの利点**
+- テストファイルを別途用意しなくても良い
+- 忠実性が高い（ブラウザを使用するのでCSS指定が再現される）
+　
