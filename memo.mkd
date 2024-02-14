@@ -1,1 +1,260 @@
-# Webアプリケーション結合テスト
+# 第７章　Webアプリケーション結合テスト
+
+## React Contextの結合テスト
+- テスト対象
+  
+```
+export const ToastProvider = ({
+  children,
+  defaultState,
+}: {
+  children: ReactNode;
+  defaultState?: Partial<ToastState>;
+}) => {
+  const { isShown, message, style, showToast, hideToast } =
+    useToastProvider(defaultState);
+  return (
+    <ToastStateContext.Provider value={{ isShown, message, style }}>
+      <ToastActionContext.Provider value={{ showToast, hideToast }}>
+        {children}
+        {/* isShown が true になった時、表示される */}
+        {isShown && <Toast message={message} style={style} />}
+      </ToastActionContext.Provider>
+    </ToastStateContext.Provider>
+  );
+};
+```
+
+- 使用例
+```
+const {showToast}=useToastAction();
+const onSubmit = handleSubmit(async () => {
+    try {
+      await postLike({ postId });
+      showToast({ message: "保存しました", style: "suceed" });
+    } catch (err) {
+      showToast({ message: "エラーが発生しました", style: "failed" });
+    }
+  });
+```
+
+ **テスト観点**
+ - Providerが保持する状態に応じて表示が切り替わるか？
+ - Providerが保持する更新関数により状態を更新できるか？
+
+### 方法：１テスト用のコンポーネントを用意し、インタラクションを実行
+
+```
+const TestComponent = ({ message }: { message: string }) => {
+  const { showToast } = useToastAction(); // <Toast> を表示するためのフック
+  return <button onClick={() => showToast({ message })}>show</button>;
+};
+```
+
+```
+test("showToast を呼び出すと Toast コンポーネントが表示される", async () => {
+  const message = "test";
+  render(
+    <ToastProvider>
+      <TestComponent message={message} />
+    </ToastProvider>
+  );
+  // 初めは表示されていない
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button"));
+  // 表示されていることを確認
+  expect(screen.getByRole("alert")).toHaveTextContent(message);
+});
+```
+
+### 方法：2 初期値を注入し表示を確認
+初期値のpropsを渡すことで表示を確認。
+```
+test("Succeed", () => {
+  const state: ToastState = {
+    isShown: true,
+    message: "成功しました",
+    style: "succeed",
+  };
+  render(<ToastProvider defaultState={state}>{null}</ToastProvider>);
+  expect(screen.getByRole("alert")).toHaveTextContent(state.message);
+});
+
+test("Failed", () => {
+  const state: ToastState = {
+    isShown: true,
+    message: "失敗しました",
+    style: "failed",
+  };
+  render(<ToastProvider defaultState={state}>{null}</ToastProvider>);
+  expect(screen.getByRole("alert")).toHaveTextContent(state.message);
+});
+```
+
+### 今回テストした範囲
+<Toast>:View
+<ToastProvider>:表示のための状態を保持
+useToastProvider:表示ロジックを管理
+useToastAction:子孫コンポーネントから呼び出す
+
+## Next.js Routerの表示結合テスト
+- テスト対象
+「ヘッダーナビゲーション」
+```
+export const Nav = ({ onCloseMenu }: Props) => {
+  const { pathname } = useRouter();
+  return (
+    <nav aria-label="ナビゲーション" className={styles.nav}>
+      <button
+        aria-label="メニューを閉じる"
+        className={styles.closeMenu}
+        onClick={onCloseMenu}
+      ></button>
+      <ul className={styles.list}>
+        <li>
+          <Link href={`/my/posts`} legacyBehavior>
+            <a
+              {...isCurrent(
+                pathname.startsWith("/my/posts") &&
+                  pathname !== "/my/posts/create"
+              )}
+            >
+              My Posts
+            </a>
+          </Link>
+        </li>
+        <li>
+          <Link href={`/my/posts/create`} legacyBehavior>
+            <a {...isCurrent(pathname === "/my/posts/create")}>Create Post</a>
+          </Link>
+        </li>
+      </ul>
+    </nav>
+  );
+};
+```
+useRouterで参照しているpathnameが、現在のURLを示している。
+
+Next.jsのrouterに関するテスチオにはnext-router-mockを使用する。
+
+```
+test("「My Posts」がカレント状態になっている", () => {
+  mockRouter.setCurrentUrl("/my/posts");
+  //↑上現在URLが"/my/posts"であると仮定している
+});
+```
+
+```
+test("「My Posts」がカレント状態になっている", () => {
+  mockRouter.setCurrentUrl("/my/posts");
+  render(<Nav onCloseMenu={() => {}} />);
+  const link = screen.getByRole("link", { name: "My Posts" });
+  expect(link).toHaveAttribute("aria-current", "page");
+});
+
+test("「Create Post」がカレント状態になっている", () => {
+  mockRouter.setCurrentUrl("/my/posts/create");
+  render(<Nav onCloseMenu={() => {}} />);
+  const link = screen.getByRole("link", { name: "Create Post" });
+  expect(link).toHaveAttribute("aria-current", "page");
+});
+```
+
+**test.eachの活用
+同じテストをパラメーターだけ変更して反復したい時test.eachを使う。
+```
+test.each([
+  { url: "/my/posts", name: "My Posts" },
+  { url: "/my/posts/123", name: "My Posts" },
+  { url: "/my/posts/create", name: "Create Post" },
+])("$url では $name がカレントになっている", ({ url, name }) => {
+  mockRouter.setCurrentUrl(url);
+  render(<Nav onCloseMenu={() => {}} />);
+  const link = screen.getByRole("link", { name });
+  expect(link).toHaveAttribute("aria-current", "page");
+});
+```
+
+## Next.js Router の操作結合テスト
+**テスト対象**
+- URLパラメーターなし：全ての記事
+- ?status=all:すべての記事
+- ?status=public:「公開」記事のみ
+- ?status=private:「下書き」記事のみ
+```
+const options = [
+  { value: "all", label: "すべて" },
+  { value: "public", label: "公開" },
+  { value: "private", label: "下書き" },
+];
+
+export const Header = () => {
+  const { query, push } = useRouter();
+  const defaultValue = parseAsNonEmptyString(query.status) || "all";
+  return (
+    <header className={styles.header}>
+      <h2 className={styles.heading}>投稿記事一覧</h2>
+      <SelectFilterOption
+        title="公開ステータス"
+        options={options}
+        selectProps={{
+          defaultValue,
+          onChange: (event) => {
+            const status = event.target.value;
+            push({ query: { ...query, status } });
+          },
+        }}
+      />
+    </header>
+  );
+};
+```
+
+**セットアップ関数**
+共通の処理はセットアップ関数にまとめる。
+```
+const user = userEvent.setup();
+
+function setup(url = "/my/posts?page=1") {
+  mockRouter.setCurrentUrl(url);
+  render(<Header />);
+  const combobox = screen.getByRole("combobox", { name: "公開ステータス" });
+  async function selectOption(label: string) {
+    await user.selectOptions(combobox, label);
+  }
+  return { combobox, selectOption };
+}
+```
+
+```
+test("デフォルトでは「すべて」が選択されている", async () => {
+  const { combobox } = setup();
+  expect(combobox).toHaveDisplayValue("すべて");
+});
+
+test("status?=public のアクセス場合「公開」が選択されている", async () => {
+  const { combobox } = setup("/my/posts?status=public");
+  expect(combobox).toHaveDisplayValue("公開");
+});
+
+test("staus?=private のアクセス場合「下書き」が選択されている", async () => {
+  const { combobox } = setup("/my/posts?status=private");
+  expect(combobox).toHaveDisplayValue("下書き");
+});
+```
+**インタラクションテスト**
+```
+test("公開ステータスを変更すると、status が変わる", async () => {
+  // すでにある page=1 が消えていないこともあわせて検証
+  const { selectOption } = setup();
+  expect(mockRouter).toMatchObject({ query: { page: "1" } });
+  await selectOption("公開");
+  expect(mockRouter).toMatchObject({
+    query: { page: "1", status: "public" },
+  });
+  await selectOption("下書き");
+  expect(mockRouter).toMatchObject({
+    query: { page: "1", status: "private" },
+  });
+});
+```
