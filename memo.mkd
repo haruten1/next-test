@@ -373,4 +373,91 @@ npm install --save-dev @storybook/testing-react
 **test-runnerの利点**
 - テストファイルを別途用意しなくても良い
 - 忠実性が高い（ブラウザを使用するのでCSS指定が再現される）
+
+# ９章　ビジュアルリグレッションテスト
+## 必要性
+**スタイル変化検知の難しさ**
+スタイルはグローバル定義にも影響を受けるのでブラウザで目視確認する必要がある。
+
+**スナップショットとの相違点**
+スナップショットはclass属性に違いがあれば検知できるが、グローバル指定の変化は検知できない。
+
+**ビジュアルリグレッションの意義**
+画像キャプチャを撮るため、ピクセル単位で差分を検出できる。
+chroniumなどのブラウザをヘッドレスモードで動作させることで実施。
+
+## reg-cliで画像を比較する
+**reg-suit**=ビジュアルリグレッションテストフレームワーク
+
+比較用dirを作成
+```
+mkdir vrt && cd vrt
+mkdir {actual,expected,diff}
+```
+
+actualとexpectedに画像を保存
+
+```
+npx reg-cli actual expected diff -R index.html
+```
+
+でレポートがhtmlとして出力される。
+
+## Storycap の導入
+**storybookを使う理由**＝ページ全体を対象とすると差分以下の部分がすべて差分として扱われてしまう。storybookを使えばコンポーネントごとの差分検出ができる。
+
+**StoryCap** = storybookに登録したstoryの画像をキャプチャーするためのツール
+
+```
+$ npm isntall storycap --save-dev
+```
+
+**storycapの実行**
+開発サーバーでも実行できるが、ビルド済みのstorybookの方がレスポンスが早いので事前ビルドを行う。
+
+その後storycapを実行
+```
+npm run storycap
+```
+
+__screenshots__にキャプチャ画像が格納されるのでexpectedにファイル名を改名
+```
+$ mv __screenshots__ expected
+```
+
+**意図的にビジュアルリグレッションを作る**
+どこかしらのcssをいじって再ビルド&再実行
+またscreenshotsに保存されるのでactualに変更
+```
+mv __screenshots__ actual
+```
+
+**reg-cliで差分を検出**
+```
+npx reg-cli actual expected diff -R index.html
+```
+
+8つのstoryで差分が検出される
+```
+✘ change  actual/Example/Button/Default.png
+✘ change  actual/Example/Page/Logged Out.png
+✘ change  actual/Example/Page/Logged In.png
+✘ change  actual/Example/Header/Logged Out.png
+✘ change  actual/Example/Header/Logged In.png
+✘ change  actual/Example/Button/Small.png
+✘ change  actual/Example/Button/Secondary.png
+✘ change  actual/Example/Button/Large.png
+```
+
+## reg-suitを導入する
+ビジュアルリグレッションテストを自動化する。
+GitHubActions AWS S3を使う
+
+
+
+
+
+
+
+
 　
