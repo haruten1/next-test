@@ -453,9 +453,51 @@ npx reg-cli actual expected diff -R index.html
 ビジュアルリグレッションテストを自動化する。
 GitHubActions AWS S3を使う
 
+# 9章E2Eテスト
 
+## 概要
+**本物のブラウザを使用するため、本番に近いテストが可能**
+- ブラウザ固有の機能連携を含むUIテスト
+- DBやサブシステム連携を含むE2Eテスト
 
+### ブラウザ固有の機能連携を含むUIテスト
+jsdomでは不十分なテスト項目
+- 複数画面を跨ぐ機能
+- 画面サイズから算出するロジック
+- CSSメディアクエリーによる表示切り替え
+- スクロール位置によるイベント発火
+- Cookieやローカルストレージなどへの保存
 
+### DBやサブシステム連携を含むE2Eテスト
+可能な限り本物に近い連携を再現して行うテストは「E2Eテスト」と言われる
+E2EテスティングフレームワークのUIオートメーションでブラウザ越しに操作を行う
+
+## Playwright のインストールと基礎
+*Playwright***=マイクロソフトが提供するE2Eテストフレームワーク
+
+```
+npm init playwright@latest
+```
+
+## 開発環境でE2Eテストを実行
+テストを行う前にbuildを行っておく。
+
+```
+npx playwright test
+```
+
+レポートを確認
+
+```
+npx playwright show-report
+```
+
+**Playwright Inspector** = テストが通らない時に原因を見つけるツール
+末尾に--debugをつける
+
+```
+npx playwright test --debug
+```
 
 
 
